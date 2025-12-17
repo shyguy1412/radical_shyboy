@@ -1,0 +1,6 @@
+[submodule "AccuracyCoin"]
+	path = AccuracyCoin
+	url = git@github.com:100thCoin/AccuracyCoin.git
+[submodule "65x02"]
+	path = 65x02
+	url = https://github.com/SingleStepTests/65x02

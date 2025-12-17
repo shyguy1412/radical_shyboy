@@ -1,0 +1,466 @@
+use serde_derive::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+pub enum AdressingMode {
+    #[serde(rename = "IMP")]
+    Implied,
+    #[serde(rename = "REL")]
+    Relative,
+    #[serde(rename = "ABS")]
+    Absolute,
+    #[serde(rename = "ACC")]
+    Accumulator,
+    #[serde(rename = "IMM")]
+    Immediate,
+    #[serde(rename = "ZP0")]
+    ZeroPage,
+    #[serde(rename = "ZPX")]
+    IndexedZeroPageX,
+    #[serde(rename = "ZPY")]
+    IndexedZeroPageY,
+    #[serde(rename = "ABX")]
+    IndexedAbsoluteX,
+    #[serde(rename = "ABY")]
+    IndexedAbsoluteY,
+    #[serde(rename = "INX")]
+    IndexedIndirect,
+    #[serde(rename = "INY")]
+    IndirectIndexed,
+    #[serde(rename = "IND")]
+    AbsoluteIndirect,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum Operation {
+    #[serde(rename = "ADC")]
+    AddToAccumulator,
+    #[serde(rename = "SBC")]
+    SubtractFromAccumulator,
+
+    #[serde(rename = "INC")]
+    Increment,
+    #[serde(rename = "INX")]
+    IncrementIndexX,
+    #[serde(rename = "INY")]
+    IncrementIndexY,
+    #[serde(rename = "DEC")]
+    Decrement,
+    #[serde(rename = "DEX")]
+    DecrementIndexX,
+    #[serde(rename = "DEY")]
+    DecrementIndexY,
+
+    #[serde(rename = "AND")]
+    BitwiseANDAccumulator,
+    #[serde(rename = "EOR")]
+    BitwiseXORAccumulator,
+    #[serde(rename = "ORA")]
+    BitwiseORAccumulator,
+
+    #[serde(rename = "ASL")]
+    LeftShift,
+    #[serde(rename = "LSR")]
+    RightShift,
+    #[serde(rename = "ROL")]
+    RotateBitLeft,
+    #[serde(rename = "ROR")]
+    RotateBitRight,
+
+    #[serde(rename = "BCC")]
+    BranchOnCarryClear,
+    #[serde(rename = "BCS")]
+    BranchOnCarrySet,
+    #[serde(rename = "BEQ")]
+    BranchOnResultZero,
+    #[serde(rename = "BMI")]
+    BranchOnResultMinus,
+    #[serde(rename = "BNE")]
+    BranchOnResultNotZero,
+    #[serde(rename = "BPL")]
+    BranchOnResultPlus,
+    #[serde(rename = "BVC")]
+    BranchOnOverflowClear,
+    #[serde(rename = "BVS")]
+    BranchOnOverflowSet,
+
+    #[serde(rename = "BIT")]
+    TestBitsWithAccumulator,
+
+    #[serde(rename = "CLC")]
+    ClearCarryFlag,
+    #[serde(rename = "CLD")]
+    ClearDecimalMode,
+    #[serde(rename = "CLI")]
+    ClearInterruptDisableBit,
+    #[serde(rename = "CLV")]
+    ClearOverflowFlag,
+
+    #[serde(rename = "CMP")]
+    ComapareWithAccumulator,
+    #[serde(rename = "CPX")]
+    CompareWithIndexX,
+    #[serde(rename = "CPY")]
+    CompareWithIndexY,
+
+    #[serde(rename = "JMP")]
+    Jump,
+    #[serde(rename = "JSR")]
+    JumpAndSaveReturn,
+
+    #[serde(rename = "LDA")]
+    LoadToAccumulator,
+    #[serde(rename = "LDX")]
+    LoadToXRegister,
+    #[serde(rename = "LDY")]
+    LoadToYRegister,
+
+    #[serde(rename = "PHA")]
+    PushAccumulatorToStack,
+    #[serde(rename = "PHP")]
+    PushStatusToStack,
+    #[serde(rename = "PLA")]
+    PullAccumulatorFromStack,
+    #[serde(rename = "PLP")]
+    PullStatusFromStack,
+
+    #[serde(rename = "RTI")]
+    ReturnFromInterrupt,
+    #[serde(rename = "RTS")]
+    ReturnFromSubroutine,
+    #[serde(rename = "SEC")]
+    SetCarryFlag,
+    #[serde(rename = "SED")]
+    DetDecimalMode,
+    #[serde(rename = "SEI")]
+    SetInterruptStatus,
+
+    #[serde(rename = "STA")]
+    StoreAccumulator,
+    #[serde(rename = "STX")]
+    StoreXRegister,
+    #[serde(rename = "STY")]
+    StoreYRegister,
+
+    #[serde(rename = "TAX")]
+    TransferAccumulatorToX,
+    #[serde(rename = "TAY")]
+    TransferAccumulatorToY,
+    #[serde(rename = "TSX")]
+    TransferStackPointerToX,
+    #[serde(rename = "TXA")]
+    TransferXToAccumulator,
+    #[serde(rename = "TXS")]
+    TransferXToStackRegister,
+    #[serde(rename = "TYA")]
+    TransferYToAccumulator,
+
+    #[serde(rename = "BRK")]
+    ForceBreak,
+
+    #[serde(rename = "NOP")]
+    NoOp,
+}
+
+enum Instruction {
+    Valid {
+        operation: Operation,
+        addressing_mode: AdressingMode,
+        bytes: u8,
+        cycles: u8,
+    },
+    Invalid,
+}
+
+impl From<u8> for Instruction {
+    fn from(value: u8) -> Self {
+        macro_rules! short_form {
+            ($op:ident, $addr:ident, $by:literal, $cy:literal) => {
+                Self::Valid {
+                    operation: Operation::$op,
+                    addressing_mode: AdressingMode::$addr,
+                    bytes: $by,
+                    cycles: $cy,
+                }
+            };
+            (Invalid) => {
+                Self::Invalid
+            };
+            (TODO) => {
+                todo!()
+            };
+        }
+        match (value) {
+            0x00 => short_form!(ForceBreak, Implied, 1, 7),
+            0x01 => short_form!(BitwiseORAccumulator, IndexedIndirect, 2, 6),
+            0x02 => short_form!(Invalid),
+            0x03 => short_form!(Invalid),
+            0x04 => short_form!(Invalid),
+            0x05 => short_form!(BitwiseORAccumulator, ZeroPage, 2, 3),
+            0x06 => short_form!(LeftShift, ZeroPage, 2, 5),
+            0x07 => short_form!(Invalid),
+            0x08 => short_form!(PushStatusToStack, Implied, 1, 3),
+            0x09 => short_form!(BitwiseORAccumulator, Immediate, 3, 2),
+            0x0A => short_form!(LeftShift, Accumulator, 1, 2),
+            0x0B => short_form!(Invalid),
+            0x0C => short_form!(Invalid),
+            0x0D => short_form!(BitwiseORAccumulator, Absolute, 3, 4),
+            0x0E => short_form!(LeftShift, Absolute, 3, 6),
+            0x0F => short_form!(Invalid),
+
+            0x10 => short_form!(BranchOnResultPlus, Relative, 2, 2),
+            0x11 => short_form!(BitwiseORAccumulator, IndirectIndexed, 2, 5),
+            0x12 => short_form!(Invalid),
+            0x13 => short_form!(Invalid),
+            0x14 => short_form!(Invalid),
+            0x15 => short_form!(BitwiseORAccumulator, IndexedZeroPageX, 2, 4),
+            0x16 => short_form!(LeftShift, ZeroPage, 2, 6),
+            0x17 => short_form!(Invalid),
+            0x18 => short_form!(ClearCarryFlag, Implied, 1, 2),
+            0x19 => short_form!(BitwiseORAccumulator, IndexedAbsoluteY, 3, 4),
+            0x1A => short_form!(Invalid),
+            0x1B => short_form!(Invalid),
+            0x1C => short_form!(Invalid),
+            0x1D => short_form!(BitwiseORAccumulator, IndexedAbsoluteX, 3, 4),
+            0x1E => short_form!(LeftShift, IndexedAbsoluteX, 3, 7),
+            0x1F => short_form!(Invalid),
+
+            0x20 => short_form!(JumpAndSaveReturn, Absolute, 3, 6),
+            0x21 => short_form!(BitwiseANDAccumulator, IndexedIndirect, 2, 6),
+            0x22 => short_form!(Invalid),
+            0x23 => short_form!(Invalid),
+            0x24 => short_form!(TestBitsWithAccumulator, ZeroPage, 2, 3),
+            0x25 => short_form!(BitwiseANDAccumulator, ZeroPage, 2, 3),
+            0x26 => short_form!(RotateBitLeft, ZeroPage, 2, 5),
+            0x27 => short_form!(Invalid),
+            0x28 => short_form!(PullStatusFromStack, Implied, 1, 4),
+            0x29 => short_form!(BitwiseANDAccumulator, Immediate, 2, 2),
+            0x2A => short_form!(RotateBitLeft, Accumulator, 1, 2),
+            0x2B => short_form!(Invalid),
+            0x2C => short_form!(TestBitsWithAccumulator, Absolute, 3, 4),
+            0x2D => short_form!(BitwiseANDAccumulator, Absolute, 3, 4),
+            0x2E => short_form!(RotateBitLeft, Absolute, 3, 6),
+            0x2F => short_form!(Invalid),
+
+            0x30 => short_form!(BranchOnResultMinus, Relative, 2, 2),
+            0x31 => short_form!(BitwiseANDAccumulator, IndirectIndexed, 2, 5),
+            0x32 => short_form!(Invalid),
+            0x33 => short_form!(Invalid),
+            0x34 => short_form!(Invalid),
+            0x35 => short_form!(BitwiseANDAccumulator, IndexedZeroPageX, 2, 4),
+            0x36 => short_form!(RotateBitLeft, IndexedZeroPageX, 2, 6),
+            0x37 => short_form!(Invalid),
+            0x38 => short_form!(SetCarryFlag, Implied, 1, 2),
+            0x39 => short_form!(BitwiseANDAccumulator, IndexedAbsoluteY, 3, 4),
+            0x3A => short_form!(Invalid),
+            0x3B => short_form!(Invalid),
+            0x3C => short_form!(Invalid),
+            0x3D => short_form!(BitwiseANDAccumulator, IndexedAbsoluteX, 3, 4),
+            0x3E => short_form!(RotateBitLeft, IndexedAbsoluteX, 3, 7),
+            0x3F => short_form!(Invalid),
+
+            0x40 => short_form!(ReturnFromInterrupt, Implied, 1, 6),
+            0x41 => short_form!(BitwiseXORAccumulator, IndexedIndirect, 2, 6),
+            0x42 => short_form!(Invalid),
+            0x43 => short_form!(Invalid),
+            0x44 => short_form!(Invalid),
+            0x45 => short_form!(BitwiseXORAccumulator, ZeroPage, 2, 3),
+            0x46 => short_form!(RightShift, ZeroPage, 2, 5),
+            0x47 => short_form!(Invalid),
+            0x48 => short_form!(PushAccumulatorToStack, Implied, 1, 3),
+            0x49 => short_form!(BitwiseXORAccumulator, Immediate, 2, 2),
+            0x4A => short_form!(RightShift, Accumulator, 1, 2),
+            0x4B => short_form!(Invalid),
+            0x4C => short_form!(Jump, Absolute, 3, 3),
+            0x4D => short_form!(BitwiseXORAccumulator, Absolute, 3, 4),
+            0x4E => short_form!(RightShift, Absolute, 3, 6),
+            0x4F => short_form!(Invalid),
+
+            0x50 => short_form!(BranchOnOverflowClear, Relative, 2, 2),
+            0x51 => short_form!(BitwiseXORAccumulator, IndirectIndexed, 2, 5),
+            0x52 => short_form!(Invalid),
+            0x53 => short_form!(Invalid),
+            0x54 => short_form!(Invalid),
+            0x55 => short_form!(BitwiseXORAccumulator, IndexedZeroPageX, 2, 4),
+            0x56 => short_form!(RightShift, IndexedZeroPageX, 2, 6),
+            0x57 => short_form!(Invalid),
+            0x58 => short_form!(ClearInterruptDisableBit, Implied, 1, 2),
+            0x59 => short_form!(BitwiseXORAccumulator, IndexedAbsoluteY, 3, 4),
+            0x5A => short_form!(Invalid),
+            0x5B => short_form!(Invalid),
+            0x5C => short_form!(Invalid),
+            0x5D => short_form!(BitwiseXORAccumulator, IndexedAbsoluteX, 3, 4),
+            0x5E => short_form!(RightShift, IndexedAbsoluteX, 3, 7),
+            0x5F => short_form!(Invalid),
+
+            0x60 => short_form!(ReturnFromSubroutine, Implied, 1, 6),
+            0x61 => short_form!(AddToAccumulator, IndexedIndirect, 2, 6),
+            0x62 => short_form!(Invalid),
+            0x63 => short_form!(Invalid),
+            0x64 => short_form!(Invalid),
+            0x65 => short_form!(AddToAccumulator, ZeroPage, 2, 3),
+            0x66 => short_form!(RotateBitRight, ZeroPage, 2, 5),
+            0x67 => short_form!(Invalid),
+            0x68 => short_form!(PullAccumulatorFromStack, Implied, 1, 4),
+            0x69 => short_form!(AddToAccumulator, Immediate, 2, 2),
+            0x6A => short_form!(RotateBitRight, Accumulator, 1, 2),
+            0x6B => short_form!(Invalid),
+            0x6C => short_form!(Jump, AbsoluteIndirect, 3, 5),
+            0x6D => short_form!(AddToAccumulator, Absolute, 3, 4),
+            0x6E => short_form!(RotateBitRight, Absolute, 3, 6),
+            0x6F => short_form!(Invalid),
+
+            0x70 => short_form!(BranchOnOverflowSet, Relative, 2, 2),
+            0x71 => short_form!(AddToAccumulator, IndirectIndexed, 2, 5),
+            0x72 => short_form!(Invalid),
+            0x73 => short_form!(Invalid),
+            0x74 => short_form!(Invalid),
+            0x75 => short_form!(AddToAccumulator, IndexedZeroPageX, 2, 4),
+            0x76 => short_form!(RotateBitRight, IndexedZeroPageX, 2, 6),
+            0x77 => short_form!(Invalid),
+            0x78 => short_form!(SetInterruptStatus, Implied, 1, 2),
+            0x79 => short_form!(AddToAccumulator, IndexedAbsoluteY, 3, 4),
+            0x7A => short_form!(Invalid),
+            0x7B => short_form!(Invalid),
+            0x7C => short_form!(Invalid),
+            0x7D => short_form!(AddToAccumulator, IndexedAbsoluteX, 3, 4),
+            0x7E => short_form!(RotateBitRight, IndexedAbsoluteX, 3, 7),
+            0x7F => short_form!(Invalid),
+
+            0x80 => short_form!(Invalid),
+            0x81 => short_form!(StoreAccumulator, IndexedIndirect, 2, 6),
+            0x82 => short_form!(Invalid),
+            0x83 => short_form!(Invalid),
+            0x84 => short_form!(StoreYRegister, ZeroPage, 2, 3),
+            0x85 => short_form!(StoreAccumulator, ZeroPage, 2, 3),
+            0x86 => short_form!(StoreXRegister, ZeroPage, 2, 3),
+            0x87 => short_form!(Invalid),
+            0x88 => short_form!(DecrementIndexY, Implied, 1, 2),
+            0x89 => short_form!(Invalid),
+            0x8A => short_form!(TransferXToAccumulator, Implied, 1, 2),
+            0x8B => short_form!(Invalid),
+            0x8C => short_form!(StoreYRegister, Absolute, 3, 4),
+            0x8D => short_form!(StoreAccumulator, Absolute, 3, 4),
+            0x8E => short_form!(StoreXRegister, Absolute, 3, 4),
+            0x8F => short_form!(Invalid),
+
+            0x90 => short_form!(BranchOnCarryClear, Relative, 2, 2),
+            0x91 => short_form!(StoreAccumulator, IndirectIndexed, 2, 6),
+            0x92 => short_form!(Invalid),
+            0x93 => short_form!(Invalid),
+            0x94 => short_form!(StoreYRegister, IndexedZeroPageX, 2, 4),
+            0x95 => short_form!(StoreAccumulator, IndexedZeroPageX, 2, 4),
+            0x96 => short_form!(StoreXRegister, IndexedZeroPageY, 2, 4),
+            0x97 => short_form!(Invalid),
+            0x98 => short_form!(TransferYToAccumulator, Implied, 1, 2),
+            0x99 => short_form!(StoreAccumulator, IndexedAbsoluteY, 3, 5),
+            0x9A => short_form!(TransferXToStackRegister, Implied, 1, 2),
+            0x9B => short_form!(Invalid),
+            0x9C => short_form!(LoadToYRegister, Absolute, 3, 4),
+            0x9D => short_form!(LoadToAccumulator, Absolute, 3, 4),
+            0x9E => short_form!(LoadToXRegister, Absolute, 3, 4),
+            0x9F => short_form!(Invalid),
+
+            0xA0 => short_form!(LoadToYRegister, Immediate, 2, 2),
+            0xA1 => short_form!(LoadToAccumulator, IndexedIndirect, 2, 6),
+            0xA2 => short_form!(LoadToXRegister, Immediate, 2, 2),
+            0xA3 => short_form!(Invalid),
+            0xA4 => short_form!(LoadToYRegister, ZeroPage, 2, 3),
+            0xA5 => short_form!(LoadToAccumulator, ZeroPage, 2, 3),
+            0xA6 => short_form!(LoadToXRegister, ZeroPage, 2, 3),
+            0xA7 => short_form!(Invalid),
+            0xA8 => short_form!(TransferAccumulatorToY, Implied, 1, 2),
+            0xA9 => short_form!(LoadToAccumulator, Immediate, 2, 2),
+            0xAA => short_form!(TransferAccumulatorToX, Implied, 1, 2),
+            0xAB => short_form!(Invalid),
+            0xAC => short_form!(LoadToYRegister, Absolute, 3, 4),
+            0xAD => short_form!(LoadToAccumulator, Absolute, 3, 4),
+            0xAE => short_form!(LoadToXRegister, Absolute, 3, 4),
+            0xAF => short_form!(Invalid),
+
+            0xB0 => short_form!(BranchOnCarrySet, Relative, 2, 2),
+            0xB1 => short_form!(LoadToAccumulator, IndirectIndexed, 2, 5),
+            0xB2 => short_form!(Invalid),
+            0xB3 => short_form!(Invalid),
+            0xB4 => short_form!(LoadToYRegister, IndexedZeroPageX, 2, 4),
+            0xB5 => short_form!(LoadToAccumulator, IndexedZeroPageX, 2, 4),
+            0xB6 => short_form!(LoadToXRegister, IndexedZeroPageY, 2, 4),
+            0xB7 => short_form!(Invalid),
+            0xB8 => short_form!(ClearOverflowFlag, Implied, 1, 2),
+            0xB9 => short_form!(LoadToAccumulator, IndexedAbsoluteY, 3, 4),
+            0xBA => short_form!(TransferStackPointerToX, Implied, 1, 2),
+            0xBB => short_form!(Invalid),
+            0xBC => short_form!(LoadToYRegister, IndexedAbsoluteX, 3, 4),
+            0xBD => short_form!(LoadToAccumulator, IndexedAbsoluteX, 3, 4),
+            0xBE => short_form!(LoadToXRegister, IndexedAbsoluteY, 3, 4),
+            0xBF => short_form!(Invalid),
+
+            0xC0 => short_form!(CompareWithIndexY, Immediate, 2, 2),
+            0xC1 => short_form!(ComapareWithAccumulator, IndexedIndirect, 2, 6),
+            0xC2 => short_form!(Invalid),
+            0xC3 => short_form!(Invalid),
+            0xC4 => short_form!(CompareWithIndexY, ZeroPage, 2, 3),
+            0xC5 => short_form!(ComapareWithAccumulator, ZeroPage, 2, 3),
+            0xC6 => short_form!(Decrement, ZeroPage, 2, 5),
+            0xC7 => short_form!(Invalid),
+            0xC8 => short_form!(IncrementIndexY, Implied, 1, 2),
+            0xC9 => short_form!(ComapareWithAccumulator, Immediate, 2, 2),
+            0xCA => short_form!(DecrementIndexX, Implied, 1, 2),
+            0xCB => short_form!(Invalid),
+            0xCC => short_form!(CompareWithIndexY, Absolute, 3, 4),
+            0xCD => short_form!(ComapareWithAccumulator, Absolute, 3, 4),
+            0xCE => short_form!(Decrement, Absolute, 3, 6),
+            0xCF => short_form!(Invalid),
+
+            0xD0 => short_form!(BranchOnResultNotZero, Relative, 2, 2),
+            0xD1 => short_form!(ComapareWithAccumulator, IndirectIndexed, 2, 5),
+            0xD2 => short_form!(Invalid),
+            0xD3 => short_form!(Invalid),
+            0xD4 => short_form!(Invalid),
+            0xD5 => short_form!(ComapareWithAccumulator, IndexedZeroPageX, 2, 4),
+            0xD6 => short_form!(Decrement, IndexedZeroPageX, 2, 6),
+            0xD7 => short_form!(Invalid),
+            0xD8 => short_form!(ClearDecimalMode, Implied, 1, 2),
+            0xD9 => short_form!(ComapareWithAccumulator, IndexedAbsoluteY, 3, 4),
+            0xDA => short_form!(Invalid),
+            0xDB => short_form!(Invalid),
+            0xDC => short_form!(Invalid),
+            0xDD => short_form!(ComapareWithAccumulator, IndexedAbsoluteX, 3, 4),
+            0xDE => short_form!(Decrement, IndexedAbsoluteX, 3, 7),
+            0xDF => short_form!(Invalid),
+
+            0xE0 => short_form!(CompareWithIndexX, Immediate, 2, 2),
+            0xE1 => short_form!(SubtractFromAccumulator, IndexedIndirect, 2, 6),
+            0xE2 => short_form!(Invalid),
+            0xE3 => short_form!(Invalid),
+            0xE4 => short_form!(CompareWithIndexX, ZeroPage, 2, 3),
+            0xE5 => short_form!(SubtractFromAccumulator, ZeroPage, 2, 3),
+            0xE6 => short_form!(Increment, ZeroPage, 2, 5),
+            0xE7 => short_form!(Invalid),
+            0xE8 => short_form!(IncrementIndexX, Implied, 1, 2),
+            0xE9 => short_form!(SubtractFromAccumulator, Immediate, 2, 2),
+            0xEA => short_form!(NoOp, Implied, 1, 2),
+            0xEB => short_form!(Invalid),
+            0xEC => short_form!(CompareWithIndexX, Absolute, 3, 4),
+            0xED => short_form!(SubtractFromAccumulator, Absolute, 3, 4),
+            0xEE => short_form!(Increment, Absolute, 3, 6),
+            0xEF => short_form!(Invalid),
+
+            0xF0 => short_form!(BranchOnResultZero, Relative, 2, 2),
+            0xF1 => short_form!(SubtractFromAccumulator, IndirectIndexed, 2, 5),
+            0xF2 => short_form!(Invalid),
+            0xF3 => short_form!(Invalid),
+            0xF4 => short_form!(Invalid),
+            0xF5 => short_form!(SubtractFromAccumulator, IndexedZeroPageX, 2, 4),
+            0xF6 => short_form!(Increment, IndexedZeroPageX, 2, 6),
+            0xF7 => short_form!(Invalid),
+            0xF8 => short_form!(DetDecimalMode, Implied, 1, 2),
+            0xF9 => short_form!(SubtractFromAccumulator, IndexedAbsoluteY, 3, 4),
+            0xFA => short_form!(Invalid),
+            0xFB => short_form!(Invalid),
+            0xFC => short_form!(Invalid),
+            0xFD => short_form!(SubtractFromAccumulator, IndexedAbsoluteX, 3, 4),
+            0xFE => short_form!(Increment, IndexedAbsoluteX, 3, 7),
+            0xFF => short_form!(Invalid),
+        }
+    }
+}
