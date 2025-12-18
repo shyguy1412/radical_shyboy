@@ -161,7 +161,7 @@ pub enum Operation {
     NoOp,
 }
 
-enum Instruction {
+pub enum Instruction {
     Valid {
         operation: Operation,
         addressing_mode: AdressingMode,
