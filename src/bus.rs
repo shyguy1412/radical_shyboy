@@ -1,6 +1,8 @@
+/// Trait that descibes a bus where not every connection is necissarily mapped to a device
 pub trait OpenBus {
     fn read(&self, addr: u16) -> Option<u8>;
-    fn write(&mut self, addr: u16, byte: u8);
+    ///true if the addr is mapped to a device, false otherwise
+    fn write(&mut self, addr: u16, byte: u8) -> bool;
 }
 
 pub trait Bus {
@@ -10,11 +12,11 @@ pub trait Bus {
 
 pub trait BusDevice<FuckyGenericContstrain> {
     type Bus: Bus;
-    fn cycle(&mut self, bus: &mut Self::Bus);
+    fn cycle(&mut self, bus: &mut Self::Bus) -> u8;
 }
 
 pub trait OpenBusDevice<B: OpenBus> {
-    fn cycle(&mut self, bus: &mut B);
+    fn cycle(&mut self, bus: &mut B) -> u8;
 }
 
 impl<B: Bus> OpenBus for B {
@@ -22,14 +24,16 @@ impl<B: Bus> OpenBus for B {
         Some(self.read(addr))
     }
 
-    fn write(&mut self, addr: u16, byte: u8) {
+    fn write(&mut self, addr: u16, byte: u8) -> bool {
         self.write(addr, byte);
+        //A Bus is guranteed to have every addr mapped to a device
+        true
     }
 }
 
 impl<D: BusDevice<()>> OpenBusDevice<D::Bus> for D {
-    fn cycle(&mut self, bus: &mut D::Bus) {
-        self.cycle(bus);
+    fn cycle(&mut self, bus: &mut D::Bus) -> u8 {
+        self.cycle(bus)
     }
 }
 

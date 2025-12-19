@@ -1,27 +1,35 @@
 use serde_derive::{Deserialize, Serialize};
 
+use crate::{
+    bus::{Bus, OpenBus},
+    ic6502::{self, IC6502},
+};
+
 #[derive(Serialize, Deserialize)]
 pub enum AdressingMode {
     #[serde(rename = "IMP")]
     Implied,
-    #[serde(rename = "REL")]
-    Relative,
-    #[serde(rename = "ABS")]
-    Absolute,
-    #[serde(rename = "ACC")]
-    Accumulator,
     #[serde(rename = "IMM")]
     Immediate,
+    #[serde(rename = "ACC")]
+    Accumulator,
+    #[serde(rename = "REL")]
+    Relative,
+
     #[serde(rename = "ZP0")]
     ZeroPage,
     #[serde(rename = "ZPX")]
     IndexedZeroPageX,
     #[serde(rename = "ZPY")]
     IndexedZeroPageY,
+
+    #[serde(rename = "ABS")]
+    Absolute,
     #[serde(rename = "ABX")]
     IndexedAbsoluteX,
     #[serde(rename = "ABY")]
     IndexedAbsoluteY,
+
     #[serde(rename = "INX")]
     IndexedIndirect,
     #[serde(rename = "INY")]
@@ -105,7 +113,7 @@ pub enum Operation {
     #[serde(rename = "JMP")]
     Jump,
     #[serde(rename = "JSR")]
-    JumpAndSaveReturn,
+    JumpToSubRoutine,
 
     #[serde(rename = "LDA")]
     LoadToAccumulator,
@@ -189,7 +197,7 @@ impl From<u8> for Instruction {
                 todo!()
             };
         }
-        match (value) {
+        match value {
             0x00 => short_form!(ForceBreak, Implied, 1, 7),
             0x01 => short_form!(BitwiseORAccumulator, IndexedIndirect, 2, 6),
             0x02 => short_form!(Invalid),
@@ -224,7 +232,7 @@ impl From<u8> for Instruction {
             0x1E => short_form!(LeftShift, IndexedAbsoluteX, 3, 7),
             0x1F => short_form!(Invalid),
 
-            0x20 => short_form!(JumpAndSaveReturn, Absolute, 3, 6),
+            0x20 => short_form!(JumpToSubRoutine, Absolute, 3, 6),
             0x21 => short_form!(BitwiseANDAccumulator, IndexedIndirect, 2, 6),
             0x22 => short_form!(Invalid),
             0x23 => short_form!(Invalid),
@@ -463,4 +471,143 @@ impl From<u8> for Instruction {
             0xFF => short_form!(Invalid),
         }
     }
+}
+
+impl AdressingMode {
+    /// Returns a tuple of the program counter offset caused by the read process
+    /// and the byte that was read
+    pub fn read(&self, cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+        use AdressingMode::*;
+        match self {
+            Implied => address_mode_imp(cpu, bus),
+            Immediate => address_mode_imm(cpu, bus),
+            Accumulator => address_mode_acc(cpu, bus),
+            Relative => address_mode_rel(cpu, bus),
+
+            ZeroPage => address_mode_zp0(cpu, bus),
+            IndexedZeroPageX => address_mode_zpx(cpu, bus),
+            IndexedZeroPageY => address_mode_zpy(cpu, bus),
+
+            Absolute => address_mode_abs(cpu, bus),
+            IndexedAbsoluteX => address_mode_abx(cpu, bus),
+            IndexedAbsoluteY => address_mode_aby(cpu, bus),
+
+            IndexedIndirect => address_mode_inx(cpu, bus),
+            IndirectIndexed => address_mode_iny(cpu, bus),
+            AbsoluteIndirect => address_mode_ind(cpu, bus),
+        }
+    }
+}
+
+///Represents the Location of some Data
+///
+///Either a byte in a Register or an Address from where to read/write
+pub enum OperationArgument {
+    Value(u8),
+    Pointer(u16),
+}
+use OperationArgument::*;
+
+/// Implied Adress mode will either not need any data at all or read from Accumulator
+#[inline(always)]
+fn address_mode_imp(cpu: &IC6502, _: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    Some((0, Value(cpu.accumulator)))
+}
+
+#[inline(always)]
+fn address_mode_imm(cpu: &IC6502, _: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    Some((1, Pointer(cpu.program_counter)))
+}
+
+#[inline(always)]
+fn address_mode_acc(cpu: &IC6502, _: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    Some((1, Value(cpu.accumulator)))
+}
+
+#[inline(always)]
+fn address_mode_rel(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    Some((1, Value(bus.read(cpu.program_counter)?)))
+}
+
+#[inline(always)]
+fn address_mode_zp0(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = bus.read(cpu.program_counter)? as u16 & 0x00FF;
+    Some((1, Pointer(addr)))
+}
+
+#[inline(always)]
+fn address_mode_zpx(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = bus.read(cpu.program_counter)? as u16 & 0x00FF;
+    let addr = addr + cpu.register_x as u16;
+    Some((1, Pointer(addr)))
+}
+
+#[inline(always)]
+fn address_mode_zpy(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = bus.read(cpu.program_counter)? as u16 & 0x00FF;
+    let addr = addr + cpu.register_y as u16;
+    Some((1, Pointer(addr)))
+}
+
+#[inline(always)]
+fn address_mode_abs(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = u16::from_le_bytes([
+        bus.read(cpu.program_counter)?,
+        bus.read(cpu.program_counter + 1)?,
+    ]);
+    Some((2, Pointer(addr)))
+}
+
+#[inline(always)]
+fn address_mode_abx(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = u16::from_le_bytes([
+        bus.read(cpu.program_counter)?,
+        bus.read(cpu.program_counter + 1)?,
+    ]);
+    let addr = addr + cpu.register_x as u16;
+    Some((2, Pointer(addr)))
+}
+
+#[inline(always)]
+fn address_mode_aby(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = u16::from_le_bytes([
+        bus.read(cpu.program_counter)?,
+        bus.read(cpu.program_counter + 1)?,
+    ]);
+    let addr = addr + cpu.register_y as u16;
+    Some((2, Pointer(addr)))
+}
+
+#[inline(always)]
+fn address_mode_ind(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = u16::from_le_bytes([
+        bus.read(cpu.program_counter)?,
+        bus.read(cpu.program_counter + 1)?,
+    ]);
+
+    //Emulate a hardware bug where at the page boundary instead of reading the next page
+    //the address wraps around to the start of the page
+    let addr = match addr {
+        0x00FF => addr & 0x00FF,
+        _ => addr,
+    };
+
+    let addr = u16::from_le_bytes([bus.read(addr)?, bus.read(addr + 1)?]);
+
+    Some((2, Pointer(addr)))
+}
+
+#[inline(always)]
+fn address_mode_inx(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = bus.read(cpu.program_counter)? as u16 + cpu.register_x as u16;
+    let addr = u16::from_le_bytes([bus.read(addr)?, bus.read(addr + 1)?]);
+    Some((1, Pointer(addr)))
+}
+
+#[inline(always)]
+fn address_mode_iny(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
+    let addr = bus.read(cpu.program_counter)? as u16;
+    let addr = u16::from_le_bytes([bus.read(addr)?, bus.read(addr + 1)?]);
+    let addr = addr + cpu.register_y as u16;
+    Some((1, Pointer(addr)))
 }
