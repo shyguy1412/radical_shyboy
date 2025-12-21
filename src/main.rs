@@ -66,11 +66,10 @@ fn main() -> Result<()> {
         let end = std::time::Instant::now();
 
         println!(
-            "./65x02/nes6502/v1/{}.json: {:05}/{}; {:05} failed; {:6.2}%;{:3}ms/{:3}µs;",
+            "./65x02/nes6502/v1/{}.json: {:5}/{}; {:6.2}%;{:3}ms/{:3}µs;",
             name,
             successful,
             cases,
-            cases - successful,
             (successful as f64 / cases as f64) * 100.,
             end.duration_since(start).as_millis(),
             start_instruction
