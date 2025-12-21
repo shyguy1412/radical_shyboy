@@ -2,7 +2,7 @@ use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TestCase<T> {
-    name: String,
+    pub name: String,
     pub initial: State<T>,
     #[serde(rename = "final")]
     pub target: State<T>,
@@ -26,7 +26,6 @@ impl crate::bus::OpenBus for Vec<(u16, u8)> {
     }
 
     fn write(&mut self, addr: u16, byte: u8) -> bool {
-        let value = (addr, byte);
         for (ram_addr, val) in self.iter_mut() {
             if *ram_addr != addr {
                 continue;
@@ -34,6 +33,7 @@ impl crate::bus::OpenBus for Vec<(u16, u8)> {
             *val = byte;
             return true;
         }
-        false
+        self.push((addr, byte));
+        true
     }
 }

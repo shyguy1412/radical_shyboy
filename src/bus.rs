@@ -12,11 +12,11 @@ pub trait Bus {
 
 pub trait BusDevice<FuckyGenericContstrain> {
     type Bus: Bus;
-    fn cycle(&mut self, bus: &mut Self::Bus) -> u8;
+    fn cycle(&mut self, bus: &mut Self::Bus) -> Option<u8>;
 }
 
 pub trait OpenBusDevice<B: OpenBus> {
-    fn cycle(&mut self, bus: &mut B) -> u8;
+    fn cycle(&mut self, bus: &mut B) -> Option<u8>;
 }
 
 impl<B: Bus> OpenBus for B {
@@ -32,7 +32,7 @@ impl<B: Bus> OpenBus for B {
 }
 
 impl<D: BusDevice<()>> OpenBusDevice<D::Bus> for D {
-    fn cycle(&mut self, bus: &mut D::Bus) -> u8 {
+    fn cycle(&mut self, bus: &mut D::Bus) -> Option<u8> {
         self.cycle(bus)
     }
 }
