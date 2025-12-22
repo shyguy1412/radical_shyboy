@@ -1,7 +1,7 @@
-mod adressing_mode;
+mod addressing_mode;
 mod operation;
 
-pub use adressing_mode::AdressingMode;
+pub use addressing_mode::AdressingMode;
 pub use operation::{Operation, Thingimagic};
 
 pub enum Instruction {
