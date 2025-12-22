@@ -7,11 +7,11 @@ use ic6502::IC6502;
 use rayon::prelude::*;
 use test::TestCase;
 
-use crate::ic6502::Instruction;
+use crate::ic6502::{Instruction, Operation};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-fn load_tests_rayon_json() -> Result<Vec<Vec<TestCase<IC6502>>>> {
+fn load_tests_rayon_json() -> Result<impl ParallelIterator<Item = Vec<TestCase<IC6502>>>> {
     let mut dir: Vec<_> = std::fs::read_dir("./65x02/nes6502/v1")?
         .filter_map(|f| f.ok())
         .collect();
@@ -24,7 +24,7 @@ fn load_tests_rayon_json() -> Result<Vec<Vec<TestCase<IC6502>>>> {
         a_val.cmp(&b_val)
     });
 
-    let suites: Vec<_> = dir
+    let suites = dir
         .into_par_iter()
         .filter(|f| {
             f.file_name()
@@ -33,13 +33,16 @@ fn load_tests_rayon_json() -> Result<Vec<Vec<TestCase<IC6502>>>> {
                 .and_then(|f| u8::from_str_radix(&f[0..2], 16).ok())
                 .map(|code| match code.into() {
                     Instruction::Invalid => false,
+                    // Instruction::Valid {
+                    //     operation: Operation::BranchOnCarrySet,
+                    //     ..
+                    // } => true,
                     Instruction::Valid { .. } => true,
                 })
                 .unwrap_or(false)
         })
         .filter_map(|f| std::fs::read_to_string(f.path()).ok())
-        .filter_map(|json| serde_json::from_str::<Vec<TestCase<IC6502>>>(&json).ok())
-        .collect();
+        .filter_map(|json| serde_json::from_str::<Vec<TestCase<IC6502>>>(&json).ok());
 
     Ok(suites)
 }
@@ -48,55 +51,39 @@ fn main() -> Result<()> {
     println!("Loading Test Cases...");
 
     let start = std::time::Instant::now();
-    let mut suites = load_tests_rayon_json()?;
-    let end = std::time::Instant::now();
+    let suites = load_tests_rayon_json()?;
 
+    let start_load = std::time::Instant::now();
+    let suites = suites.collect::<Vec<Vec<TestCase<IC6502>>>>();
+    let end_load = std::time::Instant::now();
     println!(
         "{} Tests loaded in {:.2} seconds",
         suites.len() * suites[0].len(),
-        end.duration_since(start).as_secs_f64()
+        end_load.duration_since(start_load).as_secs_f64()
     );
+    let suites = suites.into_iter();
 
-    let total_tests: f64 = (suites.len() * suites[0].len()) as f64;
+    let mut total_tests: f64 = 0.;
     let mut total_successful: f64 = 0.;
 
     println!();
 
-    let start = std::time::Instant::now();
+    let (sender, receiver) = std::sync::mpsc::channel();
 
-    for suite in &mut suites {
-        let mut successful = 0;
-        let name = suite[0].name[0..2].to_owned();
-        let cases = suite.len();
-
-        let start = std::time::Instant::now();
-        let mut start_instruction = 0;
-        for case in suite {
-            // if case.name != "16 8f a2" {
-            //     continue;
-            // }
-            let (pass, time) = run_test(case);
-            if pass {
-                successful += 1;
-            }
-            start_instruction += time;
-        }
-        let end = std::time::Instant::now();
-
-        println!(
-            "./65x02/nes6502/v1/{}.json: {:5}/{}; {:6.2}%;{:3}ms/{:3}µs;",
-            name,
-            successful,
-            cases,
-            (successful as f64 / cases as f64) * 100.,
-            end.duration_since(start).as_millis(),
-            start_instruction
-        );
-
-        total_successful += successful as f64;
-    }
+    suites.for_each(|mut suite| {
+        let result = run_suite(&mut suite);
+        let _ = sender.clone().send(result);
+    });
 
     let total = std::time::Instant::now();
+
+    drop(sender);
+
+    for (successful, cases) in receiver {
+        total_tests += cases;
+        total_successful += successful;
+    }
+
     let total_failed: f64 = total_tests - total_successful;
     let total_sucessful_percent: f64 = (total_successful / total_tests) * 100.;
     let total_failed_percent: f64 = (total_failed / total_tests) * 100.;
@@ -118,6 +105,38 @@ fn main() -> Result<()> {
         total.duration_since(start).as_secs_f64(),
     );
     Ok(())
+}
+
+fn run_suite(suite: &mut Vec<TestCase<IC6502>>) -> (f64, f64) {
+    let mut successful: f64 = 0.;
+    let name = suite[0].name[0..2].to_owned();
+    let cases = suite.len() as f64;
+
+    let start = std::time::Instant::now();
+    let mut start_instruction = 0;
+    for case in suite {
+        // if case.name != "28 87 5a" {
+        //     continue;
+        // }
+        let (pass, time) = run_test(case);
+        if pass {
+            successful += 1.;
+        }
+        start_instruction += time;
+    }
+    let end = std::time::Instant::now();
+
+    println!(
+        "./65x02/nes6502/v1/{}.json: {:5}/{}; {:6.2}%;{:3}ms/{:3}µs;",
+        name,
+        successful,
+        cases,
+        (successful as f64 / cases as f64) * 100.,
+        end.duration_since(start).as_millis(),
+        start_instruction
+    );
+
+    (successful, cases)
 }
 
 fn run_test(case: &mut TestCase<IC6502>) -> (bool, u128) {

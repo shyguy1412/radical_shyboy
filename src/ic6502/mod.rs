@@ -6,8 +6,8 @@ mod flags;
 pub use flags::*;
 
 mod opcodes;
-pub use opcodes::Instruction;
 use opcodes::Thingimagic;
+pub use opcodes::{AdressingMode, Instruction, Operation};
 
 /// Represents the State of the 6502 Mikroprocessor
 #[derive(Debug, Copy, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]

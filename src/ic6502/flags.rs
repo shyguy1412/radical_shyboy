@@ -32,11 +32,18 @@ macro_rules! unset_flag {
 }
 pub(super) use unset_flag;
 
-impl Flags {
-    pub fn is_set(self, val: u8) -> bool {
-        self & val == self as u8
-    }
+macro_rules! is_set {
+    ($field:expr, $flag:ident) => {
+        Flags::$flag & $field == Flags::$flag as u8
+    };
 }
+pub(super) use is_set;
+
+// impl Flags {
+//     pub fn is_set(self, val: u8) -> bool {
+//         self & val == self as u8
+//     }
+// }
 
 impl BitAnd<u8> for Flags {
     type Output = u8;

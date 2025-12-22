@@ -90,7 +90,7 @@ fn address_mode_rel(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationAr
 
 #[inline(always)]
 fn address_mode_zp0(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    let addr = bus.read(cpu.program_counter.wrapping_add(1))? as u16 & 0x00FF;
+    let addr = bus.read(cpu.program_counter.wrapping_add(1))? as u16;
     Some((2, Pointer(addr)))
 }
 
@@ -161,18 +161,18 @@ fn address_mode_inx(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationAr
     let addr = bus.read(cpu.program_counter.wrapping_add(1))?;
     let addr = addr.wrapping_add(cpu.register_x);
 
-    let low = bus.read(addr as u16)?;
-    let high = bus.read(addr.wrapping_add(1) as u16)?;
+    let low_byte = bus.read(addr as u16)?;
+    let high_byte = bus.read(addr.wrapping_add(1) as u16)?;
 
-    let addr = u16::from_le_bytes([low, high]);
+    let addr = u16::from_le_bytes([low_byte, high_byte]);
     Some((2, Pointer(addr)))
 }
 
 #[inline(always)]
 fn address_mode_iny(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
     let addr = bus.read(cpu.program_counter.wrapping_add(1))? as u8;
-    let low = bus.read(addr as u16)?;
-    let high = bus.read(addr.wrapping_add(1) as u16)?;
-    let addr = u16::from_le_bytes([low, high]).wrapping_add(cpu.register_y as u16);
+    let low_byte = bus.read(addr as u16)?;
+    let high_byte = bus.read(addr.wrapping_add(1) as u16)?;
+    let addr = u16::from_le_bytes([low_byte, high_byte]).wrapping_add(cpu.register_y as u16);
     Some((2, Pointer(addr)))
 }
