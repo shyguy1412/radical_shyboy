@@ -75,49 +75,44 @@ fn address_mode_imp(cpu: &IC6502, _: &impl OpenBus) -> Option<(u8, OperationArgu
 
 #[inline(always)]
 fn address_mode_imm(cpu: &IC6502, _: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    Some((2, Pointer(cpu.program_counter.overflowing_add(1).0)))
+    Some((2, Pointer(cpu.program_counter.wrapping_add(1))))
 }
 
 #[inline(always)]
 fn address_mode_acc(cpu: &IC6502, _: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    Some((2, Value(cpu.accumulator)))
+    Some((1, Value(cpu.accumulator)))
 }
 
 #[inline(always)]
 fn address_mode_rel(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    Some((
-        2,
-        Value(bus.read(cpu.program_counter.overflowing_add(1).0)?),
-    ))
+    Some((2, Value(bus.read(cpu.program_counter.wrapping_add(1))?)))
 }
 
 #[inline(always)]
 fn address_mode_zp0(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    let addr = bus.read(cpu.program_counter.overflowing_add(1).0)? as u16 & 0x00FF;
+    let addr = bus.read(cpu.program_counter.wrapping_add(1))? as u16 & 0x00FF;
     Some((2, Pointer(addr)))
 }
 
 #[inline(always)]
 fn address_mode_zpx(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    let addr = bus.read(cpu.program_counter.overflowing_add(1).0)? as u16;
-    let addr = addr.overflowing_add(cpu.register_x as u16).0;
-    let addr = addr & 0x00FF;
-    Some((2, Pointer(addr)))
+    let addr = bus.read(cpu.program_counter.wrapping_add(1))?;
+    let addr = addr.wrapping_add(cpu.register_x);
+    Some((2, Pointer(addr as u16)))
 }
 
 #[inline(always)]
 fn address_mode_zpy(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    let addr = bus.read(cpu.program_counter.overflowing_add(1).0)? as u16;
-    let addr = addr.overflowing_add(cpu.register_y as u16).0;
-    let addr = addr & 0x00FF;
-    Some((2, Pointer(addr)))
+    let addr = bus.read(cpu.program_counter.wrapping_add(1))?;
+    let addr = addr.wrapping_add(cpu.register_y);
+    Some((2, Pointer(addr as u16)))
 }
 
 #[inline(always)]
 fn address_mode_abs(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
     let addr = u16::from_le_bytes([
-        bus.read(cpu.program_counter.overflowing_add(1).0)?,
-        bus.read(cpu.program_counter.overflowing_add(2).0)?,
+        bus.read(cpu.program_counter.wrapping_add(1))?,
+        bus.read(cpu.program_counter.wrapping_add(2))?,
     ]);
     Some((3, Pointer(addr)))
 }
@@ -125,28 +120,28 @@ fn address_mode_abs(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationAr
 #[inline(always)]
 fn address_mode_abx(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
     let addr = u16::from_le_bytes([
-        bus.read(cpu.program_counter.overflowing_add(1).0)?,
-        bus.read(cpu.program_counter.overflowing_add(2).0)?,
+        bus.read(cpu.program_counter.wrapping_add(1))?,
+        bus.read(cpu.program_counter.wrapping_add(2))?,
     ]);
-    let addr = addr.overflowing_add(cpu.register_x as u16).0;
+    let addr = addr.wrapping_add(cpu.register_x as u16);
     Some((3, Pointer(addr)))
 }
 
 #[inline(always)]
 fn address_mode_aby(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
     let addr = u16::from_le_bytes([
-        bus.read(cpu.program_counter.overflowing_add(1).0)?,
-        bus.read(cpu.program_counter.overflowing_add(2).0)?,
+        bus.read(cpu.program_counter.wrapping_add(1))?,
+        bus.read(cpu.program_counter.wrapping_add(2))?,
     ]);
-    let addr = addr.overflowing_add(cpu.register_y as u16).0;
+    let addr = addr.wrapping_add(cpu.register_y as u16);
     Some((3, Pointer(addr)))
 }
 
 #[inline(always)]
 fn address_mode_ind(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
     let addr = u16::from_le_bytes([
-        bus.read(cpu.program_counter.overflowing_add(1).0)?,
-        bus.read(cpu.program_counter.overflowing_add(2).0)?,
+        bus.read(cpu.program_counter.wrapping_add(1))?,
+        bus.read(cpu.program_counter.wrapping_add(2))?,
     ]);
 
     //Emulate a hardware bug where at the page boundary instead of reading the next page
@@ -156,23 +151,28 @@ fn address_mode_ind(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationAr
         _ => addr,
     };
 
-    let addr = u16::from_le_bytes([bus.read(addr)?, bus.read(addr.overflowing_add(1).0)?]);
+    let addr = u16::from_le_bytes([bus.read(addr)?, bus.read(addr.wrapping_add(1))?]);
 
     Some((3, Pointer(addr)))
 }
 
 #[inline(always)]
 fn address_mode_inx(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    let addr = bus.read(cpu.program_counter)? as u16;
-    let addr = addr.overflowing_add(cpu.register_x as u16).0;
-    let addr = u16::from_le_bytes([bus.read(addr)?, bus.read(addr.overflowing_add(1).0)?]);
+    let addr = bus.read(cpu.program_counter.wrapping_add(1))?;
+    let addr = addr.wrapping_add(cpu.register_x);
+
+    let low = bus.read(addr as u16)?;
+    let high = bus.read(addr.wrapping_add(1) as u16)?;
+
+    let addr = u16::from_le_bytes([low, high]);
     Some((2, Pointer(addr)))
 }
 
 #[inline(always)]
 fn address_mode_iny(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    let addr = bus.read(cpu.program_counter)? as u16;
-    let addr = u16::from_le_bytes([bus.read(addr)?, bus.read(addr.overflowing_add(1).0)?]);
-    let addr = addr.overflowing_add(cpu.register_y as u16).0;
+    let addr = bus.read(cpu.program_counter.wrapping_add(1))? as u8;
+    let low = bus.read(addr as u16)?;
+    let high = bus.read(addr.wrapping_add(1) as u16)?;
+    let addr = u16::from_le_bytes([low, high]).wrapping_add(cpu.register_y as u16);
     Some((2, Pointer(addr)))
 }

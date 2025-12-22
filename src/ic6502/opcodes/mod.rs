@@ -56,7 +56,7 @@ impl From<u8> for Instruction {
             0x13 => short_form!(Invalid),
             0x14 => short_form!(Invalid),
             0x15 => short_form!(BitwiseORAccumulator, IndexedZeroPageX, 2, 4),
-            0x16 => short_form!(LeftShift, ZeroPage, 2, 6),
+            0x16 => short_form!(LeftShift, IndexedZeroPageX, 2, 6),
             0x17 => short_form!(Invalid),
             0x18 => short_form!(ClearCarryFlag, Implied, 1, 2),
             0x19 => short_form!(BitwiseORAccumulator, IndexedAbsoluteY, 3, 4),

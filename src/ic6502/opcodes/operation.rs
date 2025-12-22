@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use serde::de::value;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
@@ -246,7 +248,7 @@ fn operation_sbc(
         OperationArgument::Pointer(p) => bus.read(p)?,
     };
 
-    let value = !value.overflowing_add(1).0;
+    let value = !value.wrapping_add(1);
 
     Some(Increment)
 }
@@ -336,16 +338,13 @@ fn operation_ora(
 
     cpu.accumulator |= value;
 
-    match cpu.accumulator == 0 {
-        true => set_flag!(cpu.status, Zero),    // set flag
-        false => unset_flag!(cpu.status, Zero), //unset flag
-    }
+    set_flag!(cpu.status, Zero, cpu.accumulator == 0);
 
-    //this works because the negative status flag is bit 7, which is 1 in negative numbers
-    match Flags::Negative.is_set(cpu.accumulator) {
-        true => set_flag!(cpu.status, Negative),
-        false => unset_flag!(cpu.status, Negative),
-    }
+    set_flag!(
+        cpu.status,
+        Negative,
+        Flags::Negative.is_set(cpu.accumulator)
+    );
 
     Some(Increment)
 }
@@ -356,6 +355,23 @@ fn operation_asl(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let value = match argument {
+        Value(v) => v,
+        Pointer(p) => bus.read(p)?,
+    };
+
+    set_flag!(cpu.status, Carry, Flags::Negative.is_set(value));
+
+    let value = value << 1;
+
+    set_flag!(cpu.status, Negative, Flags::Negative.is_set(value));
+    set_flag!(cpu.status, Zero, value == 0);
+
+    match argument {
+        Value(_) => cpu.accumulator = value,
+        Pointer(p) => bus.write(p, value)?,
+    }
+
     Some(Increment)
 }
 
@@ -434,10 +450,25 @@ fn operation_bne(
 #[inline(always)]
 fn operation_bpl(
     cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
+    _: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
-    Some(Increment)
+    if Flags::Negative.is_set(cpu.status) {
+        return Some(Increment);
+    };
+
+    let Value(value) = argument else {
+        return None;
+    };
+
+    let value = value.cast_signed() as i16;
+
+    let location = cpu.program_counter.wrapping_add(2);
+
+    match value.is_negative() {
+        true => Some(Jump(location.wrapping_sub(value.unsigned_abs()))),
+        false => Some(Jump(location.wrapping_add(value.unsigned_abs()))),
+    }
 }
 
 #[inline(always)]
@@ -468,11 +499,8 @@ fn operation_bit(
 }
 
 #[inline(always)]
-fn operation_clc(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_clc(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    unset_flag!(cpu.status, Carry);
     Some(Increment)
 }
 
@@ -584,9 +612,9 @@ fn operation_pha(
     let Value(value) = argument else {
         return None;
     };
-    let stack_addr = STACK_PAGE.overflowing_add(cpu.stack_pointer as u16).0;
-    bus.write(stack_addr, value).then_some(Increment)?;
-    cpu.stack_pointer = cpu.stack_pointer.overflowing_sub(1).0;
+    let stack_addr = STACK_PAGE.wrapping_add(cpu.stack_pointer as u16);
+    bus.write(stack_addr, value)?;
+    cpu.stack_pointer = cpu.stack_pointer.wrapping_sub(1);
     Some(Increment)
 }
 
@@ -594,8 +622,14 @@ fn operation_pha(
 fn operation_php(
     cpu: &mut IC6502,
     bus: &mut impl OpenBus,
-    argument: OperationArgument,
+    _: OperationArgument,
 ) -> OperationResult {
+    let addr = (cpu.stack_pointer as u16).wrapping_add(0x0100);
+
+    bus.write(addr, cpu.status | Flags::Break);
+
+    cpu.stack_pointer = cpu.stack_pointer.wrapping_sub(1);
+
     Some(Increment)
 }
 
@@ -749,8 +783,8 @@ fn operation_brk(
     bus: &mut impl OpenBus,
     _: OperationArgument,
 ) -> OperationResult {
-    let _ = bus.read(cpu.program_counter.overflowing_add(1).0);
-    let [low_byte, high_byte] = (cpu.program_counter.overflowing_add(2).0).to_le_bytes();
+    let _ = bus.read(cpu.program_counter.wrapping_add(1));
+    let [low_byte, high_byte] = (cpu.program_counter.wrapping_add(2)).to_le_bytes();
     operation_pha(cpu, bus, Value(high_byte))?;
     operation_pha(cpu, bus, Value(low_byte))?;
     operation_pha(cpu, bus, Value(cpu.status | Flags::Break))?;

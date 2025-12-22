@@ -15,13 +15,19 @@ pub enum Flags {
 
 macro_rules! set_flag {
     ($field:expr, $flag:ident) => {
-        $field |= Flags::$flag
+        set_flag!($field, $flag, true)
+    };
+    ($field:expr, $flag:ident, $cond:expr) => {
+        match $cond {
+            true => $field |= Flags::$flag,
+            false => $field &= !Flags::$flag,
+        }
     };
 }
 pub(super) use set_flag;
 macro_rules! unset_flag {
     ($field:expr, $flag:ident) => {
-        $field &= !Flags::$flag
+        set_flag!($field, $flag, false)
     };
 }
 pub(super) use unset_flag;

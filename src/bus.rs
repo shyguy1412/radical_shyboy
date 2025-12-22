@@ -1,8 +1,7 @@
 /// Trait that descibes a bus where not every connection is necissarily mapped to a device
 pub trait OpenBus {
     fn read(&self, addr: u16) -> Option<u8>;
-    ///true if the addr is mapped to a device, false otherwise
-    fn write(&mut self, addr: u16, byte: u8) -> bool;
+    fn write(&mut self, addr: u16, byte: u8) -> Option<()>;
 }
 
 pub trait Bus {
@@ -24,10 +23,9 @@ impl<B: Bus> OpenBus for B {
         Some(self.read(addr))
     }
 
-    fn write(&mut self, addr: u16, byte: u8) -> bool {
+    fn write(&mut self, addr: u16, byte: u8) -> Option<()> {
         self.write(addr, byte);
-        //A Bus is guranteed to have every addr mapped to a device
-        true
+        Some(())
     }
 }
 

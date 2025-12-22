@@ -25,15 +25,15 @@ impl crate::bus::OpenBus for Vec<(u16, u8)> {
             })
     }
 
-    fn write(&mut self, addr: u16, byte: u8) -> bool {
+    fn write(&mut self, addr: u16, byte: u8) -> Option<()> {
         for (ram_addr, val) in self.iter_mut() {
             if *ram_addr != addr {
                 continue;
             }
             *val = byte;
-            return true;
+            return Some(());
         }
         self.push((addr, byte));
-        true
+        Some(())
     }
 }

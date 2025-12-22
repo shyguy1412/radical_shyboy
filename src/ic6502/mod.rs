@@ -6,7 +6,8 @@ mod flags;
 pub use flags::*;
 
 mod opcodes;
-use opcodes::{Instruction, Thingimagic};
+pub use opcodes::Instruction;
+use opcodes::Thingimagic;
 
 /// Represents the State of the 6502 Mikroprocessor
 #[derive(Debug, Copy, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -41,6 +42,7 @@ impl<B: OpenBus> OpenBusDevice<B> for IC6502 {
         else {
             // ! invalid instruction
             // ! currently defined as noop
+            self.program_counter = self.program_counter.wrapping_add(1);
             return None;
         };
 
@@ -49,7 +51,7 @@ impl<B: OpenBus> OpenBusDevice<B> for IC6502 {
         match operation.run(self, bus, argument)? {
             Thingimagic::Jump(ptr) => self.program_counter = ptr,
             Thingimagic::Increment => {
-                self.program_counter = self.program_counter.overflowing_add(offset as u16).0
+                self.program_counter = self.program_counter.wrapping_add(offset as u16)
             }
         };
 

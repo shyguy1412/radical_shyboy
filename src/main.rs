@@ -7,6 +7,8 @@ use ic6502::IC6502;
 use rayon::prelude::*;
 use test::TestCase;
 
+use crate::ic6502::Instruction;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn load_tests_rayon_json() -> Result<Vec<Vec<TestCase<IC6502>>>> {
@@ -24,6 +26,17 @@ fn load_tests_rayon_json() -> Result<Vec<Vec<TestCase<IC6502>>>> {
 
     let suites: Vec<_> = dir
         .into_par_iter()
+        .filter(|f| {
+            f.file_name()
+                .into_string()
+                .ok()
+                .and_then(|f| u8::from_str_radix(&f[0..2], 16).ok())
+                .map(|code| match code.into() {
+                    Instruction::Invalid => false,
+                    Instruction::Valid { .. } => true,
+                })
+                .unwrap_or(false)
+        })
         .filter_map(|f| std::fs::read_to_string(f.path()).ok())
         .filter_map(|json| serde_json::from_str::<Vec<TestCase<IC6502>>>(&json).ok())
         .collect();
@@ -49,6 +62,8 @@ fn main() -> Result<()> {
 
     println!();
 
+    let start = std::time::Instant::now();
+
     for suite in &mut suites {
         let mut successful = 0;
         let name = suite[0].name[0..2].to_owned();
@@ -57,6 +72,9 @@ fn main() -> Result<()> {
         let start = std::time::Instant::now();
         let mut start_instruction = 0;
         for case in suite {
+            // if case.name != "16 8f a2" {
+            //     continue;
+            // }
             let (pass, time) = run_test(case);
             if pass {
                 successful += 1;
@@ -103,17 +121,30 @@ fn main() -> Result<()> {
 }
 
 fn run_test(case: &mut TestCase<IC6502>) -> (bool, u128) {
+    let name = case.name.clone();
     let cpu = &mut case.initial.cpu;
     let ram = &mut case.initial.ram;
 
     let start = std::time::Instant::now();
-    cpu.cycle(ram);
+    cpu.cycle(ram).or_else(|| {
+        // drop(name);
+        // println!("CPU CRASH AT {}", name);
+        Some(8)
+    });
     let end = std::time::Instant::now();
 
     ram.sort_by(|(addr1, _), (addr2, _)| addr1.cmp(addr2));
 
-    (
-        *ram == case.target.ram && *cpu == case.target.cpu,
-        end.duration_since(start).as_micros(),
-    )
+    case.target
+        .ram
+        .sort_by(|(addr1, _), (addr2, _)| addr1.cmp(addr2));
+
+    let ram_pass = *ram == case.target.ram;
+    let cpu_pass = *cpu == case.target.cpu;
+
+    if !ram_pass || !cpu_pass {
+        drop("".to_string())
+    }
+
+    (ram_pass && cpu_pass, end.duration_since(start).as_micros())
 }
