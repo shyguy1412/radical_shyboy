@@ -115,7 +115,7 @@ fn run_suite(suite: &mut Vec<TestCase<IC6502>>) -> (f64, f64) {
     let start = std::time::Instant::now();
     let mut start_instruction = 0;
     for case in suite {
-        // if case.name != "28 87 5a" {
+        // if case.name != "88 45 70" {
         //     continue;
         // }
         let (pass, time) = run_test(case);

@@ -1,3 +1,5 @@
+use std::result;
+
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{
@@ -230,6 +232,28 @@ fn operation_adc(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let value = match argument {
+        Value(v) => v,
+        Pointer(p) => bus.read(p)?,
+    };
+
+    let (result, overflow1) = cpu
+        .accumulator
+        .overflowing_add(is_set!(cpu.status, Carry) as u8);
+
+    let (result, overflow2) = result.overflowing_add(value);
+
+    set_flag!(cpu.status, Carry, overflow1 || overflow2);
+    set_flag!(cpu.status, Zero, result == 0);
+    set_flag!(cpu.status, Negative, is_set!(result, Negative));
+    //(result ^ A) & (result ^ memory) & $80
+    set_flag!(
+        cpu.status,
+        Overflow,
+        ((result ^ cpu.accumulator) & (result ^ value) & 0x80) == 0x80
+    );
+
+    cpu.accumulator = result;
     Some(Increment)
 }
 
@@ -244,8 +268,20 @@ fn operation_sbc(
         Pointer(p) => bus.read(p)?,
     };
 
-    let value = !value.wrapping_add(1);
+    let (result, overflow1) = cpu.accumulator.overflowing_add(!value);
+    let (result, overflow2) = result.overflowing_add(is_set!(cpu.status, Carry) as u8);
 
+    set_flag!(cpu.status, Carry, overflow1 || overflow2);
+    set_flag!(cpu.status, Zero, result == 0);
+    set_flag!(cpu.status, Negative, is_set!(result, Negative));
+    //(result ^ A) & (result ^ memory) & $80
+    set_flag!(
+        cpu.status,
+        Overflow,
+        ((result ^ cpu.accumulator) & (result ^ !value) & 0x80) == 0x80
+    );
+
+    cpu.accumulator = result;
     Some(Increment)
 }
 
@@ -255,24 +291,29 @@ fn operation_inc(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let Pointer(ptr) = argument else {
+        return None;
+    };
+    let value = bus.read(ptr)?.wrapping_add(1);
+    bus.write(ptr, value)?;
+    set_flag!(cpu.status, Zero, value == 0);
+    set_flag!(cpu.status, Negative, is_set!(value, Negative));
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_inx(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_inx(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.register_x = cpu.register_x.wrapping_add(1);
+    set_flag!(cpu.status, Zero, cpu.register_x == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.register_x, Negative));
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_iny(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_iny(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.register_y = cpu.register_y.wrapping_add(1);
+    set_flag!(cpu.status, Zero, cpu.register_y == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.register_y, Negative));
     Some(Increment)
 }
 
@@ -282,24 +323,29 @@ fn operation_dec(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let Pointer(ptr) = argument else {
+        return None;
+    };
+    let value = bus.read(ptr)?.wrapping_sub(1);
+    bus.write(ptr, value)?;
+    set_flag!(cpu.status, Zero, value == 0);
+    set_flag!(cpu.status, Negative, is_set!(value, Negative));
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_dex(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_dex(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.register_x = cpu.register_x.wrapping_sub(1);
+    set_flag!(cpu.status, Zero, cpu.register_x == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.register_x, Negative));
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_dey(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_dey(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.register_y = cpu.register_y.wrapping_sub(1);
+    set_flag!(cpu.status, Zero, cpu.register_y == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.register_y, Negative));
     Some(Increment)
 }
 
@@ -317,7 +363,6 @@ fn operation_and(
     cpu.accumulator &= value;
 
     set_flag!(cpu.status, Zero, cpu.accumulator == 0);
-
     set_flag!(cpu.status, Negative, is_set!(cpu.accumulator, Negative));
 
     Some(Increment)
@@ -545,30 +590,20 @@ fn operation_clc(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -
 }
 
 #[inline(always)]
-fn operation_cld(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_cld(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    unset_flag!(cpu.status, DecimalMode);
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_cli(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_cli(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
     unset_flag!(cpu.status, InterruptDisable);
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_clv(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_clv(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    unset_flag!(cpu.status, Overflow);
     Some(Increment)
 }
 
@@ -578,6 +613,17 @@ fn operation_cmp(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let value = match argument {
+        Value(v) => v,
+        Pointer(ptr) => bus.read(ptr)?,
+    };
+
+    let result = cpu.accumulator.wrapping_sub(value);
+
+    set_flag!(cpu.status, Carry, cpu.accumulator >= value);
+    set_flag!(cpu.status, Zero, cpu.accumulator == value);
+    set_flag!(cpu.status, Negative, is_set!(result, Negative));
+
     Some(Increment)
 }
 
@@ -587,6 +633,17 @@ fn operation_cpx(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let value = match argument {
+        Value(v) => v,
+        Pointer(ptr) => bus.read(ptr)?,
+    };
+
+    let result = cpu.register_x.wrapping_sub(value);
+
+    set_flag!(cpu.status, Carry, cpu.register_x >= value);
+    set_flag!(cpu.status, Zero, cpu.register_x == value);
+    set_flag!(cpu.status, Negative, is_set!(result, Negative));
+
     Some(Increment)
 }
 
@@ -596,18 +653,30 @@ fn operation_cpy(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let value = match argument {
+        Value(v) => v,
+        Pointer(ptr) => bus.read(ptr)?,
+    };
+
+    let result = cpu.register_y.wrapping_sub(value);
+
+    set_flag!(cpu.status, Carry, cpu.register_y >= value);
+    set_flag!(cpu.status, Zero, cpu.register_y == value);
+    set_flag!(cpu.status, Negative, is_set!(result, Negative));
+
     Some(Increment)
 }
 
 #[inline(always)]
 fn operation_jmp(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
+    _: &mut IC6502,
+    _: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
     let Pointer(value) = argument else {
         return None;
     };
+    //implement hardware bug if jump location is across pages
 
     Some(Jump(value))
 }
@@ -636,6 +705,13 @@ fn operation_lda(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let value = match argument {
+        Value(v) => v,
+        Pointer(ptr) => bus.read(ptr)?,
+    };
+    cpu.accumulator = value;
+    set_flag!(cpu.status, Zero, cpu.accumulator == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.accumulator, Negative));
     Some(Increment)
 }
 
@@ -645,6 +721,13 @@ fn operation_ldx(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let value = match argument {
+        Value(v) => v,
+        Pointer(ptr) => bus.read(ptr)?,
+    };
+    cpu.register_x = value;
+    set_flag!(cpu.status, Zero, cpu.register_x == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.register_x, Negative));
     Some(Increment)
 }
 
@@ -654,6 +737,13 @@ fn operation_ldy(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let value = match argument {
+        Value(v) => v,
+        Pointer(ptr) => bus.read(ptr)?,
+    };
+    cpu.register_y = value;
+    set_flag!(cpu.status, Zero, cpu.register_y == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.register_y, Negative));
     Some(Increment)
 }
 
@@ -697,6 +787,9 @@ fn operation_pla(
     cpu.stack_pointer = cpu.stack_pointer.wrapping_add(1);
     cpu.accumulator = bus.read(cpu.stack_pointer as u16 + 0x0100)?;
 
+    set_flag!(cpu.status, Zero, cpu.accumulator == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.accumulator, Negative));
+
     Some(Increment)
 }
 
@@ -717,7 +810,7 @@ fn operation_plp(
 fn operation_rti(
     cpu: &mut IC6502,
     bus: &mut impl OpenBus,
-    argument: OperationArgument,
+    _: OperationArgument,
 ) -> OperationResult {
     operation_plp(cpu, bus, Value(cpu.accumulator))?;
     let Jump(pc) = operation_rts(cpu, bus, Value(cpu.accumulator))? else {
@@ -731,9 +824,10 @@ fn operation_rti(
 fn operation_rts(
     cpu: &mut IC6502,
     bus: &mut impl OpenBus,
-    argument: OperationArgument,
+    _: OperationArgument,
 ) -> OperationResult {
     let accumulator = cpu.accumulator;
+    let status = cpu.status;
 
     operation_pla(cpu, bus, Value(accumulator));
 
@@ -744,6 +838,7 @@ fn operation_rts(
     let high_byte = cpu.accumulator;
 
     cpu.accumulator = accumulator;
+    cpu.status = status;
 
     let location = u16::from_le_bytes([low_byte, high_byte]).wrapping_add(1);
 
@@ -757,20 +852,14 @@ fn operation_sec(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -
 }
 
 #[inline(always)]
-fn operation_sed(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_sed(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    set_flag!(cpu.status, DecimalMode);
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_sei(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_sei(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    set_flag!(cpu.status, InterruptDisable);
     Some(Increment)
 }
 
@@ -780,6 +869,12 @@ fn operation_sta(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let Pointer(addr) = argument else {
+        return None;
+    };
+
+    bus.write(addr, cpu.accumulator)?;
+
     Some(Increment)
 }
 
@@ -789,6 +884,12 @@ fn operation_stx(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let Pointer(addr) = argument else {
+        return None;
+    };
+
+    bus.write(addr, cpu.register_x)?;
+
     Some(Increment)
 }
 
@@ -798,60 +899,58 @@ fn operation_sty(
     bus: &mut impl OpenBus,
     argument: OperationArgument,
 ) -> OperationResult {
+    let Pointer(addr) = argument else {
+        return None;
+    };
+
+    bus.write(addr, cpu.register_y)?;
+
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_tax(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_tax(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.register_x = cpu.accumulator;
+    set_flag!(cpu.status, Zero, cpu.accumulator == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.accumulator, Negative));
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_tay(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_tay(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.register_y = cpu.accumulator;
+    set_flag!(cpu.status, Zero, cpu.accumulator == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.accumulator, Negative));
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_tsx(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_tsx(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.register_x = cpu.stack_pointer;
+    set_flag!(cpu.status, Zero, cpu.register_x == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.register_x, Negative));
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_txa(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_txa(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.accumulator = cpu.register_x;
+    set_flag!(cpu.status, Zero, cpu.accumulator == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.accumulator, Negative));
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_txs(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_txs(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.stack_pointer = cpu.register_x;
     Some(Increment)
 }
 
 #[inline(always)]
-fn operation_tya(
-    cpu: &mut IC6502,
-    bus: &mut impl OpenBus,
-    argument: OperationArgument,
-) -> OperationResult {
+fn operation_tya(cpu: &mut IC6502, _: &mut impl OpenBus, _: OperationArgument) -> OperationResult {
+    cpu.accumulator = cpu.register_y;
+    set_flag!(cpu.status, Zero, cpu.accumulator == 0);
+    set_flag!(cpu.status, Negative, is_set!(cpu.accumulator, Negative));
     Some(Increment)
 }
 

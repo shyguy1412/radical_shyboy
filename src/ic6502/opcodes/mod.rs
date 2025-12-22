@@ -198,9 +198,9 @@ impl From<u8> for Instruction {
             0x99 => short_form!(StoreAccumulator, IndexedAbsoluteY, 3, 5),
             0x9A => short_form!(TransferXToStackRegister, Implied, 1, 2),
             0x9B => short_form!(Invalid),
-            0x9C => short_form!(LoadToYRegister, Absolute, 3, 4),
-            0x9D => short_form!(LoadToAccumulator, Absolute, 3, 4),
-            0x9E => short_form!(LoadToXRegister, Absolute, 3, 4),
+            0x9C => short_form!(Invalid),
+            0x9D => short_form!(StoreAccumulator, IndexedAbsoluteX, 3, 4),
+            0x9E => short_form!(Invalid),
             0x9F => short_form!(Invalid),
 
             0xA0 => short_form!(LoadToYRegister, Immediate, 2, 2),

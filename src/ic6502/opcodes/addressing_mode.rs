@@ -139,19 +139,19 @@ fn address_mode_aby(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationAr
 
 #[inline(always)]
 fn address_mode_ind(cpu: &IC6502, bus: &impl OpenBus) -> Option<(u8, OperationArgument)> {
-    let addr = u16::from_le_bytes([
+    let addr_low_byte = u16::from_le_bytes([
         bus.read(cpu.program_counter.wrapping_add(1))?,
         bus.read(cpu.program_counter.wrapping_add(2))?,
     ]);
 
-    //Emulate a hardware bug where at the page boundary instead of reading the next page
-    //the address wraps around to the start of the page
-    let addr = match addr {
-        0x00FF => addr & 0x00FF,
-        _ => addr,
-    };
+    // due to a hardware bug the addition doesnt carry into the high byte
+    let addr_high_byte = u16::from_le_bytes([
+        bus.read(cpu.program_counter.wrapping_add(1))?
+            .wrapping_add(1),
+        bus.read(cpu.program_counter.wrapping_add(2))?,
+    ]);
 
-    let addr = u16::from_le_bytes([bus.read(addr)?, bus.read(addr.wrapping_add(1))?]);
+    let addr = u16::from_le_bytes([bus.read(addr_low_byte)?, bus.read(addr_high_byte)?]);
 
     Some((3, Pointer(addr)))
 }
